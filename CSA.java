@@ -224,15 +224,17 @@ public class CSA {
     try {
       String line = in.readLine();
       Integer realDepartureTime = this.getDepartureTime(line);
-      if(!(realDepartureTime == null)) {
+      if(realDepartureTime > -1) {
         this.compute(departureStation, arrivalStation, realDepartureTime);
       }
       else {
         boolean validEntry = false;
         while(!validEntry) {
-          System.out.println("Invalid entry + add advice");
+          System.out.println("Invalid entry, please choose a valid path or type 'quickest'");
           line = in.readLine();
-          if(!(realDepartureTime == null)) {
+          realDepartureTime = this.getDepartureTime(line);
+          if(realDepartureTime > -1) {
+            validEntry = true;
             this.compute(departureStation, arrivalStation, realDepartureTime);
           }
         }
@@ -243,7 +245,7 @@ public class CSA {
   }
 
   /**
-   * 
+   * Return -1 for invalid entry
    * @param entry
    * @return
    */
@@ -253,12 +255,19 @@ public class CSA {
       return this.profiles.get(departureStation).getDepartureTimeForQuickest();
     }
     else {
-      int pathNumber = Integer.parseInt(entry);
+      int pathNumber;
+      try {
+        pathNumber = Integer.parseInt(entry);
+      }
+      catch(Exception e) {
+        // return -1 if input is not a number
+        return -1;
+      }
       if(this.profiles.get(departureStation).paretoOptima.size() > pathNumber) {
         return this.profiles.get(departureStation).paretoOptima.get(pathNumber).departureTimestamp;
       }
     }
-    return (Integer)null;
+    return -1;
   }
 
   /**
