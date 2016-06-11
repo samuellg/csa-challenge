@@ -56,7 +56,6 @@ class ParetoOptima {
 
   public void addCandidate(PathSchedule pathSchedule) {
     // If there is already a pareto optima in the profile
-    System.out.println("add profile");
     if (!this.paretoOptima.isEmpty()) {
       int lastEntryIndex = this.paretoOptima.size() - 1;
       PathSchedule lastEntry = this.paretoOptima.get(lastEntryIndex);
@@ -87,8 +86,10 @@ class ParetoOptima {
    */
   public String toString() {
     String result = "";
+    int position = 0;
     for (PathSchedule optima : this.paretoOptima) {
-      result += "departure time : " + optima.departureTimestamp + "; arrival time : " + optima.arrivalTimestamp + "\n";
+      result += "* " + position + " : Departure time : " + optima.departureTimestamp + "; Arrival time : " + optima.arrivalTimestamp + "\n";
+      position ++;
     }
     return result;
   }
@@ -206,7 +207,7 @@ public class CSA {
       this.saveProfile(this.timetable.connections.get(connectionIndex));
     }
     if(CSA.interactive) {
-      this.displayProfiles();
+      this.displayPathSchedules();
       this.runInteractiveShell();
     }
     else {
@@ -225,6 +226,7 @@ public class CSA {
       String line = in.readLine();
       Integer realDepartureTime = this.getDepartureTime(line);
       if(realDepartureTime > -1) {
+        System.out.println("The complete path is :");
         this.compute(departureStation, arrivalStation, realDepartureTime);
       }
       else {
@@ -235,6 +237,7 @@ public class CSA {
           realDepartureTime = this.getDepartureTime(line);
           if(realDepartureTime > -1) {
             validEntry = true;
+            System.out.println("The complete path is :");
             this.compute(departureStation, arrivalStation, realDepartureTime);
           }
         }
@@ -332,12 +335,16 @@ public class CSA {
   /**
    * 
    */
-  protected void displayProfiles() {
-    for (Map.Entry<Integer, ParetoOptima> entry : this.profiles.entrySet()) {
-      Integer stationId = entry.getKey();
-      ParetoOptima profile = entry.getValue();
-      System.out.println("Profile for " + stationId + " : \n" + profile);
-    }
+  protected void displayPathSchedules() {
+    System.out.println("Best paths available are :");
+    ParetoOptima profile = this.profiles.get(this.departureStation);
+    System.out.println(profile);
+//    System.out.println("Profile for " + stationId + " : \n" + profile);
+//    for (Map.Entry<Integer, ParetoOptima> entry : this.profiles.entrySet()) {
+//      Integer stationId = entry.getKey();
+//      ParetoOptima profile = entry.getValue();
+//      System.out.println("Profile for " + stationId + " : \n" + profile);
+//    }
   }
 
   /**
