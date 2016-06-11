@@ -56,6 +56,7 @@ class ParetoOptima {
 
   public void addCandidate(PathSchedule pathSchedule) {
     // If there is already a pareto optima in the profile
+    System.out.println("add profile");
     if (!this.paretoOptima.isEmpty()) {
       int lastEntryIndex = this.paretoOptima.size() - 1;
       PathSchedule lastEntry = this.paretoOptima.get(lastEntryIndex);
@@ -70,8 +71,15 @@ class ParetoOptima {
   }
   
   public int getDepartureTimeForQuickest() {
-    // TODO
-    return 0;
+    int departureTime = Integer.MAX_VALUE;
+    int result = 0;
+    for(PathSchedule pathSchedule : this.paretoOptima) {
+      if(pathSchedule.duration < departureTime) {
+        departureTime = pathSchedule.duration;
+        result = pathSchedule.departureTimestamp;
+      }
+    }
+    return result;
   }
 
   /**
@@ -245,9 +253,12 @@ public class CSA {
       return this.profiles.get(departureStation).getDepartureTimeForQuickest();
     }
     else {
-      //TODO
-      return this.profiles.get(departureStation).paretoOptima.get(0).departureTimestamp;
+      int pathNumber = Integer.parseInt(entry);
+      if(this.profiles.get(departureStation).paretoOptima.size() > pathNumber) {
+        return this.profiles.get(departureStation).paretoOptima.get(pathNumber).departureTimestamp;
+      }
     }
+    return (Integer)null;
   }
 
   /**
