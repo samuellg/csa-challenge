@@ -38,26 +38,34 @@ class Timetable {
   }
 };
 
+class PathSchedule {
+  int departureTimestamp, arrivalTimestamp, duration;
+  public PathSchedule(int departureTimestamp, int arrivalTimestamp) {
+    this.departureTimestamp = departureTimestamp;
+    this.arrivalTimestamp = arrivalTimestamp;
+    this.duration = arrivalTimestamp - departureTimestamp;
+  }
+}
 
 class ParetoOptima {
-  protected List<List<Integer>> paretoOptima;
+  protected List<PathSchedule> paretoOptima;
 
   public ParetoOptima() {
-    this.paretoOptima = new ArrayList<List<Integer>>();
+    this.paretoOptima = new ArrayList<PathSchedule>();
   }
 
-  public void addCandidate(List<Integer> candidate) {
+  public void addCandidate(PathSchedule pathSchedule) {
     // If there is already a pareto optima in the profile
     if (!this.paretoOptima.isEmpty()) {
       int lastEntryIndex = this.paretoOptima.size() - 1;
-      List<Integer> lastEntry = this.paretoOptima.get(lastEntryIndex);
+      PathSchedule lastEntry = this.paretoOptima.get(lastEntryIndex);
       // Check whether candidate is dominated by last entry
-      if (lastEntry.get(0) >= candidate.get(0) && lastEntry.get(1) <= candidate.get(1)) {
+      if (!(lastEntry.arrivalTimestamp == pathSchedule.arrivalTimestamp)) {
         // Append candidate to the list
-        this.paretoOptima.add(candidate);
+        this.paretoOptima.add(pathSchedule);
       }
     } else {
-      this.paretoOptima.add(candidate);
+      this.paretoOptima.add(pathSchedule);
     }
   }
   
@@ -71,8 +79,8 @@ class ParetoOptima {
    */
   public String toString() {
     String result = "";
-    for (List<Integer> optima : this.paretoOptima) {
-      result += "departure time : " + optima.get(0) + "; arrival time : " + optima.get(1) + "\n";
+    for (PathSchedule optima : this.paretoOptima) {
+      result += "departure time : " + optima.departureTimestamp + "; arrival time : " + optima.arrivalTimestamp + "\n";
     }
     return result;
   }
@@ -203,7 +211,7 @@ public class CSA {
    * 
    */
   private void runInteractiveShell() {
-    System.out.println("Type the number of the desired path :");
+    System.out.println("Type the number of the desired path or type 'quickest':");
     BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
     try {
       String line = in.readLine();
@@ -221,7 +229,6 @@ public class CSA {
           }
         }
       }
-      System.out.println("You have chosen the path :" + line);
     } catch (IOException e) {
       e.printStackTrace();
     }
@@ -233,12 +240,13 @@ public class CSA {
    * @return
    */
   int getDepartureTime(String entry) {
-    if(entry == "quickest") {
+    if(entry.equals("quickest")) {
+      System.out.println("The quickest path is :");
       return this.profiles.get(departureStation).getDepartureTimeForQuickest();
     }
     else {
       //TODO
-      return this.profiles.get(departureStation).paretoOptima.get(0).get(0);
+      return this.profiles.get(departureStation).paretoOptima.get(0).departureTimestamp;
     }
   }
 
@@ -290,9 +298,7 @@ public class CSA {
         currentConnection.departureStation;
     boolean profileSetUp = this.profiles.containsKey(connectionDepartureStation);
     if (inConnection[arrivalStation] != null) {
-      List<Integer> candidate = new ArrayList<Integer>();
-      candidate.add(currentConnection.departureTimestamp);
-      candidate.add(this.earliestArrival[arrivalStation]);
+      PathSchedule candidate = new PathSchedule(currentConnection.departureTimestamp,this.earliestArrival[arrivalStation]);
       if (!profileSetUp) {
         ParetoOptima profile = new ParetoOptima();
         profile.addCandidate(candidate);
