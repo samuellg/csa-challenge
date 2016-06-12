@@ -9,6 +9,7 @@ if ARGV.size != 1
 end
 
 def consume_answer(io)
+  puts "test"
   line = io.gets.strip
   if line != "NO_SOLUTION"
     while !line.empty?

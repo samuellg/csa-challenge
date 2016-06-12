@@ -39,8 +39,22 @@ class Timetable {
   }
 };
 
+class PathScheduleComparatorArrival implements Comparator<PathSchedule> {
+  @Override
+  public int compare(PathSchedule p1, PathSchedule p2) {
+    if (p1.arrivalTimestamp < p2.arrivalTimestamp)
+      return 1;
+    else if (p1.arrivalTimestamp > p2.arrivalTimestamp)
+      return -1;
+    // Prevents two different PathSchedule to be considered equals by TreeSet
+    else if (p1.departureTimestamp > p2.departureTimestamp)
+      return 1;
+    else
+      return 0;
+  }
+}
 
-class PathSchedule {
+class PathSchedule{
   int departureTimestamp, arrivalTimestamp, duration;
 
   public PathSchedule(int departureTimestamp, int arrivalTimestamp) {
@@ -52,10 +66,10 @@ class PathSchedule {
 
 
 class ParetoOptima {
-  protected List<PathSchedule> paretoOptima;
+  protected TreeSet<PathSchedule> paretoOptima;
 
   public ParetoOptima() {
-    this.paretoOptima = new ArrayList<PathSchedule>();
+    this.paretoOptima = new TreeSet<PathSchedule>(new PathScheduleComparatorArrival());
   }
 
   /**
@@ -64,26 +78,18 @@ class ParetoOptima {
    */
   public void addCandidate(PathSchedule candidate) {
     // If there is already a pareto optima in the profile
-    if (!this.paretoOptima.isEmpty()) {
-      boolean isDominated = false;
-      Collection<PathSchedule> newlyDominatedEntries = new HashSet<PathSchedule>();
-      for(PathSchedule p : this.paretoOptima) {
-        if (p.arrivalTimestamp <= candidate.arrivalTimestamp) {
-          isDominated = true;
-          break;
-        }
-        else {
-          // If an existing entry become dominated
-          if(candidate.departureTimestamp == p.departureTimestamp && candidate.arrivalTimestamp < p.arrivalTimestamp) {
-            newlyDominatedEntries.add(p);
-          }
-        }
+    if (!this.paretoOptima.isEmpty()) {      
+      PathSchedule last = this.paretoOptima.last();
+      if (last.arrivalTimestamp <= candidate.arrivalTimestamp) {
+        // dominated
+        return;
       }
-      if(!isDominated) {
-        this.paretoOptima.removeAll(newlyDominatedEntries);
-        this.paretoOptima.add(candidate);
+      else if(last.departureTimestamp == candidate.departureTimestamp) {
+        this.paretoOptima.remove(last);
       }
-    } else {
+      this.paretoOptima.add(candidate);
+    }
+    else {
       this.paretoOptima.add(candidate);
     }
   }
@@ -94,14 +100,18 @@ class ParetoOptima {
    * @return
    */
   public int getBestArrivalTime(int departureTime) {
-    int bestArrivalTime = Integer.MAX_VALUE;
-    for (PathSchedule pathSchedule : this.paretoOptima) {
-      if (pathSchedule.departureTimestamp >= departureTime
-          && pathSchedule.arrivalTimestamp < bestArrivalTime) {
-        bestArrivalTime = pathSchedule.arrivalTimestamp;
+    // Iterator ordered by increasing arrival time
+    Iterator<PathSchedule> it =  this.paretoOptima.descendingIterator();
+    int earliestArrival = Integer.MAX_VALUE;
+    PathSchedule p;
+    while (it.hasNext()) {
+      p = it.next();
+      if(p.departureTimestamp >= departureTime) {
+        earliestArrival = p.arrivalTimestamp;
+        break;
       }
     }
-    return bestArrivalTime;
+    return earliestArrival;
   }
 
   public int getDepartureTimeForQuickest() {
@@ -260,7 +270,6 @@ public class CSA {
       }
     }
     if (CSA.interactive) {
-      this.displayPathSchedules();
       this.runInteractiveShell();
     } else {
       int departureTimestamp = this.profiles.get(departureStation).getDepartureTimeForQuickest();
@@ -272,11 +281,14 @@ public class CSA {
    * 
    */
   private void runInteractiveShell() {
+    // Transform schedule into a list to benefits from indices
+    List<PathSchedule> schedule = new ArrayList<PathSchedule>(this.profiles.get(this.departureStation).paretoOptima);
+    this.displayPathSchedules(schedule);
     System.out.println("Type the number of the desired path or type 'quickest':");
     BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
     try {
       String line = in.readLine();
-      Integer realDepartureTime = this.getDepartureTime(line);
+      Integer realDepartureTime = this.getDepartureTime(line, schedule);
       if (realDepartureTime > -1) {
         this.compute(departureStation, arrivalStation, realDepartureTime);
       } else {
@@ -284,7 +296,7 @@ public class CSA {
         while (!validEntry) {
           System.out.println("Invalid entry, please choose a valid path or type 'quickest'");
           line = in.readLine();
-          realDepartureTime = this.getDepartureTime(line);
+          realDepartureTime = this.getDepartureTime(line, schedule);
           if (realDepartureTime > -1) {
             validEntry = true;
             this.compute(departureStation, arrivalStation, realDepartureTime);
@@ -302,7 +314,7 @@ public class CSA {
    * @param entry
    * @return
    */
-  int getDepartureTime(String entry) {
+  int getDepartureTime(String entry, List<PathSchedule> schedule) {
     if (entry.equals("quickest")) {
       System.out.println("The quickest path is :");
       return this.profiles.get(departureStation).getDepartureTimeForQuickest();
@@ -314,9 +326,9 @@ public class CSA {
         // return -1 if input is not a number
         return -1;
       }
-      if (this.profiles.get(departureStation).paretoOptima.size() > pathNumber) {
+      if (schedule.size() > pathNumber) {
         System.out.println("The complete path is :");
-        return this.profiles.get(departureStation).paretoOptima.get(pathNumber).departureTimestamp;
+        return schedule.get(pathNumber).departureTimestamp;
       }
     }
     return -1;
@@ -385,10 +397,17 @@ public class CSA {
   /**
    * 
    */
-  protected void displayPathSchedules() {
+  protected void displayPathSchedules(List<PathSchedule> schedules) {
     System.out.println("Best paths available are :");
-    ParetoOptima profile = this.profiles.get(this.departureStation);
-    System.out.println(profile);
+    String result = "";
+    int position = 0;
+    for (PathSchedule optima : schedules) {
+      result +=
+          "* " + position + " : Departure time : " + optima.departureTimestamp
+              + "; Arrival time : " + optima.arrivalTimestamp + "\n";
+      position++;
+    }
+    System.out.println(result);
   }
 
   /**
