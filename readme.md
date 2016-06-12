@@ -152,3 +152,15 @@ We included 48 hours of train connections in Europe starting the January 1st 197
 The data is not real, but pretty close.
 
 You can run the benchmark with ```ruby bench.rb ./csa_cpp```
+
+## Changes added in this fork
+
+The Java implementation has been modified. The algorithm now uses profile query to retrieve the quickest path (not the earliest arrival path as it used to).
+
+The algorithm can be run by using the following command :
+```java CSA < small_test_dataset_2```
+
+An interactive mode has also been added. It allows the user to choose between several Pareto optimal pathes (criterias are arrival time & journey duration).
+This can be run by using the following unix command :
+```(cat small_test_dataset_2 && cat) |java CSA interactive```
+where small_test_data_set_2 can be replaced by any data input file.
