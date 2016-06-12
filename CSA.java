@@ -1,4 +1,5 @@
 import java.io.*;
+import java.nio.file.Path;
 import java.util.*;
 
 class Connection {
@@ -38,14 +39,17 @@ class Timetable {
   }
 };
 
+
 class PathSchedule {
   int departureTimestamp, arrivalTimestamp, duration;
+
   public PathSchedule(int departureTimestamp, int arrivalTimestamp) {
     this.departureTimestamp = departureTimestamp;
     this.arrivalTimestamp = arrivalTimestamp;
     this.duration = arrivalTimestamp - departureTimestamp;
   }
 }
+
 
 class ParetoOptima {
   protected List<PathSchedule> paretoOptima;
@@ -54,26 +58,57 @@ class ParetoOptima {
     this.paretoOptima = new ArrayList<PathSchedule>();
   }
 
-  public void addCandidate(PathSchedule pathSchedule) {
+  /**
+   * 
+   * @param candidate
+   */
+  public void addCandidate(PathSchedule candidate) {
     // If there is already a pareto optima in the profile
     if (!this.paretoOptima.isEmpty()) {
-      int lastEntryIndex = this.paretoOptima.size() - 1;
-      PathSchedule lastEntry = this.paretoOptima.get(lastEntryIndex);
-      // Check whether candidate is dominated by last entry
-      if (!(lastEntry.arrivalTimestamp == pathSchedule.arrivalTimestamp)) {
-        // Append candidate to the list
-        this.paretoOptima.add(pathSchedule);
+      boolean isDominated = false;
+      Collection<PathSchedule> newlyDominatedEntries = new HashSet<PathSchedule>();
+      for(PathSchedule p : this.paretoOptima) {
+        if (p.arrivalTimestamp <= candidate.arrivalTimestamp) {
+          isDominated = true;
+          break;
+        }
+        else {
+          // If an existing entry become dominated
+          if(candidate.departureTimestamp == p.departureTimestamp && candidate.arrivalTimestamp < p.arrivalTimestamp) {
+            newlyDominatedEntries.add(p);
+          }
+        }
+      }
+      if(!isDominated) {
+        this.paretoOptima.removeAll(newlyDominatedEntries);
+        this.paretoOptima.add(candidate);
       }
     } else {
-      this.paretoOptima.add(pathSchedule);
+      this.paretoOptima.add(candidate);
     }
   }
-  
+
+  /**
+   * 
+   * @param departureTime
+   * @return
+   */
+  public int getBestArrivalTime(int departureTime) {
+    int bestArrivalTime = Integer.MAX_VALUE;
+    for (PathSchedule pathSchedule : this.paretoOptima) {
+      if (pathSchedule.departureTimestamp >= departureTime
+          && pathSchedule.arrivalTimestamp < bestArrivalTime) {
+        bestArrivalTime = pathSchedule.arrivalTimestamp;
+      }
+    }
+    return bestArrivalTime;
+  }
+
   public int getDepartureTimeForQuickest() {
     int departureTime = Integer.MAX_VALUE;
     int result = 0;
-    for(PathSchedule pathSchedule : this.paretoOptima) {
-      if(pathSchedule.duration < departureTime) {
+    for (PathSchedule pathSchedule : this.paretoOptima) {
+      if (pathSchedule.duration < departureTime) {
         departureTime = pathSchedule.duration;
         result = pathSchedule.departureTimestamp;
       }
@@ -88,12 +123,15 @@ class ParetoOptima {
     String result = "";
     int position = 0;
     for (PathSchedule optima : this.paretoOptima) {
-      result += "* " + position + " : Departure time : " + optima.departureTimestamp + "; Arrival time : " + optima.arrivalTimestamp + "\n";
-      position ++;
+      result +=
+          "* " + position + " : Departure time : " + optima.departureTimestamp
+              + "; Arrival time : " + optima.arrivalTimestamp + "\n";
+      position++;
     }
     return result;
   }
 }
+
 
 /**
  *
@@ -194,23 +232,37 @@ public class CSA {
     this.profiles = new HashMap<Integer, ParetoOptima>();
     this.arrivalStation = arrivalStation;
     this.departureStation = departureStation;
-    
+
     // Generate profiles
     for (int connectionIndex = this.timetable.connections.size() - 1; connectionIndex >= 0; connectionIndex--) {
-      // TODO : check if necessary to reinitialize earliest_arrival at
-      // each profile update
-      int currentDepartureTimeStamp = this.timetable.connections.get(connectionIndex).departureTimestamp;
-      int currentDepartureStation = this.timetable.connections.get(connectionIndex).departureStation;
-      
-      this.initialize(currentDepartureStation, currentDepartureTimeStamp);
-      this.generateProfile(connectionIndex, arrivalStation);
-      this.saveProfile(this.timetable.connections.get(connectionIndex));
+      Connection connection = this.timetable.connections.get(connectionIndex);
+      // If the connection is directly linked to arrival station
+      boolean profileSetUp = this.profiles.containsKey(connection.departureStation);
+      if (!profileSetUp) {
+        ParetoOptima profile = new ParetoOptima();
+        this.profiles.put(connection.departureStation, profile);
+      }
+      if (this.timetable.connections.get(connectionIndex).arrival_station == this.arrivalStation) {
+        PathSchedule candidate =
+            new PathSchedule(connection.departureTimestamp, connection.arrivalTimestamp);
+        this.profiles.get(connection.departureStation).addCandidate(candidate);
+      } else {
+        // If profile is set for arrival station, check if paths to final target station are available
+        if(this.profiles.containsKey(connection.arrival_station)) {
+          int bestArrivalTime =
+              this.profiles.get(connection.arrival_station).getBestArrivalTime(
+                  connection.arrivalTimestamp);
+          if (bestArrivalTime < Integer.MAX_VALUE) {
+            PathSchedule candidate = new PathSchedule(connection.departureTimestamp, bestArrivalTime);
+            this.profiles.get(connection.departureStation).addCandidate(candidate);
+          }
+        }
+      }
     }
-    if(CSA.interactive) {
+    if (CSA.interactive) {
       this.displayPathSchedules();
       this.runInteractiveShell();
-    }
-    else {
+    } else {
       int departureTimestamp = this.profiles.get(departureStation).getDepartureTimeForQuickest();
       this.compute(departureStation, arrivalStation, departureTimestamp);
     }
@@ -225,19 +277,16 @@ public class CSA {
     try {
       String line = in.readLine();
       Integer realDepartureTime = this.getDepartureTime(line);
-      if(realDepartureTime > -1) {
-        System.out.println("The complete path is :");
+      if (realDepartureTime > -1) {
         this.compute(departureStation, arrivalStation, realDepartureTime);
-      }
-      else {
+      } else {
         boolean validEntry = false;
-        while(!validEntry) {
+        while (!validEntry) {
           System.out.println("Invalid entry, please choose a valid path or type 'quickest'");
           line = in.readLine();
           realDepartureTime = this.getDepartureTime(line);
-          if(realDepartureTime > -1) {
+          if (realDepartureTime > -1) {
             validEntry = true;
-            System.out.println("The complete path is :");
             this.compute(departureStation, arrivalStation, realDepartureTime);
           }
         }
@@ -249,24 +298,24 @@ public class CSA {
 
   /**
    * Return -1 for invalid entry
+   * 
    * @param entry
    * @return
    */
   int getDepartureTime(String entry) {
-    if(entry.equals("quickest")) {
+    if (entry.equals("quickest")) {
       System.out.println("The quickest path is :");
       return this.profiles.get(departureStation).getDepartureTimeForQuickest();
-    }
-    else {
+    } else {
       int pathNumber;
       try {
         pathNumber = Integer.parseInt(entry);
-      }
-      catch(Exception e) {
+      } catch (Exception e) {
         // return -1 if input is not a number
         return -1;
       }
-      if(this.profiles.get(departureStation).paretoOptima.size() > pathNumber) {
+      if (this.profiles.get(departureStation).paretoOptima.size() > pathNumber) {
+        System.out.println("The complete path is :");
         return this.profiles.get(departureStation).paretoOptima.get(pathNumber).departureTimestamp;
       }
     }
@@ -317,11 +366,12 @@ public class CSA {
    * 
    */
   void saveProfile(Connection currentConnection) {
-    int connectionDepartureStation =
-        currentConnection.departureStation;
+    int connectionDepartureStation = currentConnection.departureStation;
     boolean profileSetUp = this.profiles.containsKey(connectionDepartureStation);
     if (inConnection[arrivalStation] != null) {
-      PathSchedule candidate = new PathSchedule(currentConnection.departureTimestamp,this.earliestArrival[arrivalStation]);
+      PathSchedule candidate =
+          new PathSchedule(currentConnection.departureTimestamp,
+              this.earliestArrival[arrivalStation]);
       if (!profileSetUp) {
         ParetoOptima profile = new ParetoOptima();
         profile.addCandidate(candidate);
@@ -339,12 +389,6 @@ public class CSA {
     System.out.println("Best paths available are :");
     ParetoOptima profile = this.profiles.get(this.departureStation);
     System.out.println(profile);
-//    System.out.println("Profile for " + stationId + " : \n" + profile);
-//    for (Map.Entry<Integer, ParetoOptima> entry : this.profiles.entrySet()) {
-//      Integer stationId = entry.getKey();
-//      ParetoOptima profile = entry.getValue();
-//      System.out.println("Profile for " + stationId + " : \n" + profile);
-//    }
   }
 
   /**
@@ -376,8 +420,13 @@ public class CSA {
 
       while (null != line && !line.isEmpty()) {
         String[] tokens = line.split(" ");
+        System.out.println("line : " + line);
         csa.computeProfiles(Integer.parseInt(tokens[0]), Integer.parseInt(tokens[1]),
             Integer.parseInt(tokens[2]));
+        if (CSA.interactive) {
+          System.out
+              .println("You can type another request (departure_station arrival_station departure_time), or type entry to quit");
+        }
         line = in.readLine();
       }
     } catch (Exception e) {
