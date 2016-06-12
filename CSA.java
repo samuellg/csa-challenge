@@ -96,10 +96,18 @@ class ParetoOptima {
 
   /**
    * 
+   * @param candidate
+   * @return
+   */
+  boolean isDominatedByLastEntry(PathSchedule candidate) {
+    return this.paretoOptima.last().arrivalTimestamp <= candidate.arrivalTimestamp;
+  }
+  /**
+   * 
    * @param departureTime
    * @return
    */
-  public int getBestArrivalTime(int departureTime) {
+  public int getEarliestArrival(int departureTime) {
     // Iterator ordered by increasing arrival time
     Iterator<PathSchedule> it =  this.paretoOptima.descendingIterator();
     int earliestArrival = Integer.MAX_VALUE;
@@ -243,15 +251,17 @@ public class CSA {
     this.arrivalStation = arrivalStation;
     this.departureStation = departureStation;
 
+    // Initialize profile for departure station
+    this.profiles.put(departureStation, new ParetoOptima());
     // Generate profiles
     for (int connectionIndex = this.timetable.connections.size() - 1; connectionIndex >= 0; connectionIndex--) {
       Connection connection = this.timetable.connections.get(connectionIndex);
-      // If the connection is directly linked to arrival station
       boolean profileSetUp = this.profiles.containsKey(connection.departureStation);
       if (!profileSetUp) {
         ParetoOptima profile = new ParetoOptima();
         this.profiles.put(connection.departureStation, profile);
       }
+      // If the connection is directly linked to arrival station
       if (this.timetable.connections.get(connectionIndex).arrival_station == this.arrivalStation) {
         PathSchedule candidate =
             new PathSchedule(connection.departureTimestamp, connection.arrivalTimestamp);
@@ -260,9 +270,11 @@ public class CSA {
         // If profile is set for arrival station, check if paths to final target station are available
         if(this.profiles.containsKey(connection.arrival_station)) {
           int bestArrivalTime =
-              this.profiles.get(connection.arrival_station).getBestArrivalTime(
+              this.profiles.get(connection.arrival_station).getEarliestArrival(
                   connection.arrivalTimestamp);
-          if (bestArrivalTime < Integer.MAX_VALUE) {
+          // 1-to-1 profile query pruning rule
+          if (this.profiles.get(this.departureStation).getEarliestArrival(0) > 
+          bestArrivalTime) {
             PathSchedule candidate = new PathSchedule(connection.departureTimestamp, bestArrivalTime);
             this.profiles.get(connection.departureStation).addCandidate(candidate);
           }
